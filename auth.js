@@ -95,7 +95,7 @@ function openBrowser(url) {
  * Perform login by:
  * 1. Opening PonyMail's login page in the browser
  * 2. Starting a local HTTP server with a simple form where the user pastes
- *    their cookie after logging in
+ *    their cookie after logging in, OR uses the bookmarklet to auto-fill
  * 3. Saving the cookie once received
  *
  * @param {string} baseUrl - PonyMail base URL
@@ -197,19 +197,30 @@ export function performLogin(baseUrl, timeoutMs = LOGIN_TIMEOUT_MS) {
 
 function loginPage(baseUrl) {
   const oauthUrl = `${baseUrl}/oauth.html`;
+  const hostname = new URL(baseUrl).hostname;
   return `<!DOCTYPE html>
 <html>
 <head><title>PonyMail MCP Login</title></head>
 <body style="font-family:system-ui;max-width:640px;margin:40px auto;padding:0 20px">
   <h1>🐴 PonyMail MCP Login</h1>
-  <p><strong>Step 1:</strong> Log into PonyMail in your browser:</p>
+  
+  <p><strong>Step 1:</strong> Log into PonyMail (if you haven't already):</p>
   <p><a href="${oauthUrl}" target="_blank" style="font-size:1.2em;color:#0066cc">
     ➜ Open ${oauthUrl}
   </a></p>
-  <p><strong>Step 2:</strong> After logging in, open DevTools (<code>Cmd+Option+I</code> or <code>F12</code>)
-     → <strong>Application</strong> tab → <strong>Cookies</strong> → <code>${new URL(baseUrl).hostname}</code></p>
-  <p>Copy the <strong>entire cookie string</strong>. It typically looks like:<br>
+
+  <p><strong>Step 2:</strong> After logging in, get the session cookie. The cookie is HttpOnly, so you need to find it via DevTools:</p>
+  <ol style="line-height:1.8">
+    <li>On <code>${hostname}</code>, open DevTools: <code>Cmd+Option+I</code> (or <code>F12</code>)</li>
+    <li>Go to the <strong>Network</strong> tab</li>
+    <li>Reload the page (or click any link)</li>
+    <li>Click on any request to <code>${hostname}</code> (e.g., the document or any <code>api/</code> call)</li>
+    <li>In <strong>Headers</strong> → <strong>Request Headers</strong> → find the <strong>Cookie:</strong> line</li>
+    <li>Copy the <code>ponymail=xxxxxxxx-xxxx-...</code> part</li>
+  </ol>
+  <p>It typically looks like:<br>
      <code style="background:#f0f0f0;padding:2px 6px">ponymail=abc123def456...</code></p>
+
   <p><strong>Step 3:</strong> Paste it below:</p>
   <form method="POST" action="/save">
     <input name="cookie" type="text" placeholder="ponymail=..." 
@@ -220,6 +231,14 @@ function loginPage(baseUrl) {
       Save Cookie
     </button>
   </form>
+
+  <details style="margin-top:30px">
+    <summary style="cursor:pointer;color:#0066cc">💡 Quick alternative: Console one-liner</summary>
+    <p>On <code>${hostname}</code>, open DevTools Console and run:</p>
+    <pre style="background:#f5f5f5;padding:12px;border-radius:4px;overflow-x:auto;font-size:0.85em">fetch('/api/preferences.lua').then(r=>r.json()).then(j=>console.log(j.login?.credentials ? '✅ Logged in as: '+j.login.credentials.fullname+'\\nNow check Network tab for any api/ request → Request Headers → Cookie' : '❌ Not logged in — log in first'))</pre>
+    <p>This confirms you're logged in and triggers a network request so the cookie appears in the Network tab.</p>
+  </details>
+
   <p style="color:#888;margin-top:30px;font-size:0.9em">
     The cookie will be saved to <code>~/.ponymail-mcp/session.json</code> and used for API requests.
     This page will close automatically after saving. Session expires after ~20 hours.
